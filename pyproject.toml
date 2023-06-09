@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[metadata]
+name = "ttapi"
+version = "0.0.1"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+ttapi = ["config/*.toml"]
+
+[tool.setuptools.packages.find]
+exclude = ["ttapi.tests*"]
+
+[project]
+name = "ttapi"
+version = "0.0.1"
+authors = [
+  { name="Carlos Herraiz", email="cuantaco@gmail.com" },
+]
+description = "A Tastytrade API library"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "requests",
+  "pydantic",
+  "websockets"
+]
+
+
