@@ -1,10 +1,12 @@
 import asyncio
 from asyncio import Queue
 import json
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, AsyncIterator
 import websockets
 from ttapi.session import Session
-from ttapi.streamer_models import SubscriptionType
+from ttapi.models import (JsonDataclass, QuoteAlert, UnderlyingYearGainSummary, 
+                          InstrumentType, OrderChain, PlacedOrder, PriceEffect)
+from ttapi.models import SubscriptionType
 
 class AlertStreamer:
     """
@@ -19,8 +21,6 @@ class AlertStreamer:
         self._token: str = session.token
         # Base wss url
         self._base_wss: str = session.wss
-
-        self._done = False
         
         self._queue: Queue = Queue()
         self._websocket = None
@@ -49,10 +49,46 @@ class AlertStreamer:
             # Subscribes to HEARBEAT subscription
             self._heartbeat_task = asyncio.create_task(self._heartbeat())
 
-            while not self._done:
+            while True:
                 raw_message = await self._websocket.recv()
-                print(raw_message)
                 await self._queue.put(json.loads(raw_message))
+
+    async def listen(self) -> AsyncIterator[JsonDataclass]:
+        """
+        Iterate over non-heartbeat messages received from the streamer,
+        mapping them to their appropriate data class.
+        """
+        while True:
+            data = await self._queue.get()
+            type_str = data.get('type')
+            if type_str is not None:
+                yield self._map_message(type_str, data['data'])
+            elif data.get('action') != 'heartbeat':
+                print('subscription message: %s', data)
+                #logger.debug('subscription message: %s', data) 
+
+    def _map_message(self, type_str: str, data: dict) -> JsonDataclass:
+        """
+        I'm not sure what the user-status messages look like, so they're absent.
+        """
+        if type_str == 'AccountBalance':
+            return AccountBalance(**data)
+        elif type_str == 'CurrentPosition':
+            return CurrentPosition(**data)
+        elif type_str == 'Order':
+            return PlacedOrder(**data)
+        elif type_str == 'OrderChain':
+            return OrderChain(**data)
+        elif type_str == 'QuoteAlert':
+            return QuoteAlert(**data)
+        elif type_str == 'TradingStatus':
+            return TradingStatus(**data)
+        elif type_str == 'UnderlyingYearGainSummary':
+            return UnderlyingYearGainSummary(**data)
+        elif type_str == 'PublicWatchlists':
+            return Watchlist(**data)
+        else:
+            raise TastytradeError(f'Unknown message type: {type_str}\n{data}')
                 
 
     async def _heartbeat(self, period: int =10) -> None:
@@ -83,8 +119,8 @@ class AlertStreamer:
         """
         Closes the websocket connection and cancels the heartbeat task.
         """
-        self._done = True
-        await asyncio.gather(self._connect_task, self._heartbeat_task)
+        self._connect_task.cancel()
+        self._heartbeat_task.cancel()
     
 
 
