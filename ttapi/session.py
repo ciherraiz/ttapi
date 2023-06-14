@@ -78,3 +78,7 @@ class Session:
     @property
     def wss(self) -> str:
         return self._base_wss
+    
+    @property
+    def external_id(self) -> str:
+        return self._external_id
