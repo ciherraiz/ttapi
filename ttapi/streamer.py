@@ -3,10 +3,12 @@ from asyncio import Queue
 import json
 from typing import Any, Optional, Union, AsyncIterator
 import websockets
+from ttapi.account import Account
 from ttapi.session import Session
-from ttapi.models import (JsonDataclass, QuoteAlert, UnderlyingYearGainSummary, 
-                          InstrumentType, OrderChain, PlacedOrder, PriceEffect)
-from ttapi.models import SubscriptionType
+from ttapi.models import (JsonDataclass, Position, QuoteAlert, UnderlyingYearGainSummary, 
+                          OrderChain, PlacedOrder, AccountBalance, TradingStatus, SubscriptionType)
+from ttapi.watchlists import Watchlist
+from ttapi.exceptions import TastyTradeException
 
 class AlertStreamer:
     """
@@ -36,6 +38,7 @@ class AlertStreamer:
         self = cls(session)
         while not self._websocket:
             await asyncio.sleep(0.1)
+
         return self
     
     async def _connect(self) -> None:
@@ -43,15 +46,18 @@ class AlertStreamer:
         Connect to the websocket server using the URL and authorization token provided
         during initialization.
         """
-        headers = {'Authorization': f'Bearer {self._token}'}
+        headers = {'Authorization': f'{self._token}'}
         async with websockets.connect(self._base_wss, extra_headers=headers) as websocket:
             self._websocket = websocket
             # Subscribes to HEARBEAT subscription
             self._heartbeat_task = asyncio.create_task(self._heartbeat())
 
             while True:
-                raw_message = await self._websocket.recv()
-                await self._queue.put(json.loads(raw_message))
+                # waiting for a new message
+                message = await self._websocket.recv()
+                #logger.debug('raw message: %s', raw_message)
+                # add a json object to the queue
+                await self._queue.put(json.loads(message))
 
     async def listen(self) -> AsyncIterator[JsonDataclass]:
         """
@@ -64,17 +70,15 @@ class AlertStreamer:
             if type_str is not None:
                 yield self._map_message(type_str, data['data'])
             elif data.get('action') != 'heartbeat':
-                print('subscription message: %s', data)
+                pass
                 #logger.debug('subscription message: %s', data) 
 
     def _map_message(self, type_str: str, data: dict) -> JsonDataclass:
-        """
-        I'm not sure what the user-status messages look like, so they're absent.
-        """
+
         if type_str == 'AccountBalance':
             return AccountBalance(**data)
         elif type_str == 'CurrentPosition':
-            return CurrentPosition(**data)
+            return Position(**data)
         elif type_str == 'Order':
             return PlacedOrder(**data)
         elif type_str == 'OrderChain':
@@ -88,16 +92,42 @@ class AlertStreamer:
         elif type_str == 'PublicWatchlists':
             return Watchlist(**data)
         else:
-            raise TastytradeError(f'Unknown message type: {type_str}\n{data}')
+            raise TastyTradeException(f'Unknown message type: {type_str}\n{data}')
                 
+    async def account_subscribe(self, accounts: list[Account]) -> None:
+        """
+        Subscribes to account-level updates (balances, orders, positions).
+
+        :param accounts: list of :class:`tastytrade.account.Account`s to subscribe to updates for
+        """
+        await self._subscribe(SubscriptionType.ACCOUNT, [acc.account_number for acc in accounts])
+
+    async def public_watchlists_subscribe(self) -> None:
+        """
+        Subscribes to public watchlist updates.
+        """
+        await self._subscribe(SubscriptionType.PUBLIC_WATCHLISTS)
+
+    async def quote_alerts_subscribe(self) -> None:
+        """
+        Subscribes to quote alerts (which are configured at a user level).
+        """
+        await self._subscribe(SubscriptionType.QUOTE_ALERTS)
+
+    async def user_message_subscribe(self, session: Session) -> None:
+        """
+        Subscribes to user-level messages, e.g. new account creation.
+        """
+        await self._subscribe(SubscriptionType.USER_MESSAGE, value=session.external_id)
 
     async def _heartbeat(self, period: int =10) -> None:
         """
         Sends a heartbeat message to keep the connection alive.
         """
-        while not self._done:
+        while True:
             await self._subscribe(SubscriptionType.HEARTBEAT, '')
             # send the heartbeat every period seconds
+            #print("\U00002764")
             await asyncio.sleep(period)
 
     async def _subscribe(self, subscription: SubscriptionType, value: Union[Optional[str], list[str]] = '') -> None:

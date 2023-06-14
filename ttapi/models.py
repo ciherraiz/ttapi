@@ -229,6 +229,12 @@ class Position(JsonDataclass):
     expires_at: Optional[datetime] = None
     fixing_price: Optional[Decimal] = None
     deliverable_type: Optional[str] = None
+    average_yearly_market_close_price: Optional[Decimal] = None
+    average_daily_market_close_price: Optional[Decimal] = None
+    realized_day_gain_effect: Optional[PriceEffect] = None
+    realized_day_gain_date: Optional[date] = None
+    realized_today_effect: Optional[PriceEffect] = None
+    realized_today_date: Optional[date] = None
 
 class Lot(JsonDataclass):
     """
@@ -495,7 +501,7 @@ class Leg(JsonDataclass):
     """
     Dataclass that represents an order leg.
 
-    Classes that inherit from :class:`TradeableTastytradeJsonDataclass` can
+    Classes that inherit from :class:`TradeableJsonDataclass` can
     call :meth:`build_leg` to build a leg from the dataclass.
     """
     instrument_type: InstrumentType
@@ -1072,7 +1078,7 @@ class Leg(JsonDataclass):
     """
     Dataclass that represents an order leg.
 
-    Classes that inherit from :class:`TradeableTastytradeJsonDataclass` can
+    Classes that inherit from :class:`TradeableJsonDataclass` can
     call :meth:`build_leg` to build a leg from the dataclass.
     """
     instrument_type: InstrumentType
@@ -1083,7 +1089,7 @@ class Leg(JsonDataclass):
     fills: Optional[list[FillInfo]] = None
 
 
-class TradeableTastytradeJsonDataclass(JsonDataclass):
+class TradeableJsonDataclass(JsonDataclass):
     """
     Dataclass that represents a tradeable instrument.
 
@@ -1381,3 +1387,6 @@ class OrderChain(JsonDataclass):
     computed_data: ComputedData
     lite_nodes_sizes: int
     lite_nodes: list[OrderChainNode]
+
+
+    
