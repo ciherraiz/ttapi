@@ -20,7 +20,7 @@ class Account(JsonDataclass):
     nickname: str
     account_type_name: str
     is_closed: bool
-    day_trader_status: str
+    day_trader_status: bool
     is_firm_error: bool
     is_firm_proprietary: bool
     is_futures_approved: bool
