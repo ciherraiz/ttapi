@@ -2,7 +2,9 @@ import asyncio
 from asyncio import Queue
 import json
 from typing import Any, Optional, Union, AsyncIterator
-import websockets
+import aiohttp
+#import websockets
+from ttapi.config import logger
 from ttapi.account import Account
 from ttapi.session import Session
 from ttapi.models import (JsonDataclass, Position, QuoteAlert, UnderlyingYearGainSummary, 
@@ -47,17 +49,19 @@ class AlertStreamer:
         during initialization.
         """
         headers = {'Authorization': f'{self._token}'}
-        async with websockets.connect(self._base_wss, extra_headers=headers) as websocket:
-            self._websocket = websocket
-            # Subscribes to HEARBEAT subscription
-            self._heartbeat_task = asyncio.create_task(self._heartbeat())
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(self._base_wss, headers=headers) as ws:
+                self._websocket = ws
+                # Subscribes to HEARBEAT subscription
+                self._heartbeat_task = asyncio.create_task(self._heartbeat())
 
-            while True:
-                # waiting for a new message
-                message = await self._websocket.recv()
-                #logger.debug('raw message: %s', raw_message)
-                # add a json object to the queue
-                await self._queue.put(json.loads(message))
+                while True:
+                    # waiting for a new message
+                    async for raw_msg in ws:
+                        message = json.loads(raw_msg.data)
+                        logger.debug(f'msg recv: {message}')
+                        # add a json object to the queue
+                        await self._queue.put(message)
 
     async def listen(self) -> AsyncIterator[JsonDataclass]:
         """
@@ -70,8 +74,7 @@ class AlertStreamer:
             if type_str is not None:
                 yield self._map_message(type_str, data['data'])
             elif data.get('action') != 'heartbeat':
-                pass
-                #logger.debug('subscription message: %s', data) 
+                logger.debug(f'subs msg recv: {data}') 
 
     def _map_message(self, type_str: str, data: dict) -> JsonDataclass:
 
@@ -127,7 +130,6 @@ class AlertStreamer:
         while True:
             await self._subscribe(SubscriptionType.HEARTBEAT, '')
             # send the heartbeat every period seconds
-            #print("\U00002764")
             await asyncio.sleep(period)
 
     async def _subscribe(self, subscription: SubscriptionType, value: Union[Optional[str], list[str]] = '') -> None:
@@ -141,8 +143,8 @@ class AlertStreamer:
         }
         if value:
             message['value'] = value
-        #logger.debug('sending alert subscription: %s', message)
-        await self._websocket.send(json.dumps(message))  # type: ignore
+        logger.debug(f'send subs: {message}')
+        await self._websocket.send_str(json.dumps(message))  # type: ignore
 
 
     async def close(self) -> None:

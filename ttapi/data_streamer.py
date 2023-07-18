@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from typing import Optional, AsyncIterator
 import aiohttp
+from ttapi.config import logger
 from ttapi.exceptions import TastyTradeException
 from ttapi.models import EventType, Channel, Event, Candle, Greeks, Profile, Quote, Summary, TheoPrice, TimeAndSale, Trade
 from ttapi.session import Session
@@ -34,7 +35,9 @@ class DataStreamer:
 
         response = session.request('GET', '/quote-streamer-tokens')
         token_data = response.data['data']
-        #logger.debug('response %s', token_data)
+
+        logger.debug(f'Token data {token_data}')
+        
         self._auth_token = token_data['token']
         self._wss_url = (token_data['websocket-url'] + '/cometd').replace('https', 'wss')
         self._connect_task = asyncio.create_task(self._connect())
@@ -61,58 +64,6 @@ class DataStreamer:
             self._counter += 1
         return self._counter
 
-    async def _connect2(self) -> None:
-        """
-        Connect to the websocket server using the URL and authorization token provided
-        during initialization.
-        """
-        headers = {'Authorization': f'{self._auth_token}'}
-
-        # Connect to the websocket server
-        async with aiohttp.ClientSession() as session:
-            async with session.ws_connect(self._wss_url, headers=headers) as ws:
-                self._websocket = ws
-                await self._handshake()
-
-                while not self.client_id:
-                    async for raw_msg in ws:
-                    # Receive raw message from the websocket
-                        message = json.loads(raw_msg.data)[0]
-
-                        # Handshake phase
-                        if message['channel'] == Channel.HANDSHAKE:
-                            #logger.debug('Handshake message: %s', message)
-                            print(f'handshake answer: {message}')
-                            if message['successful']:
-                                self.client_id = message['clientId']
-                                self._heartbeat_task = asyncio.create_task(self._heartbeat(10))
-                                break
-                            else:
-                                raise TastyTradeException('Handshake failed')
-
-                # Handshake finished
-                # Main loop to handle incoming messages
-                while True:
-                # Receive raw message from the websocket
-                    async for raw_msg in ws:
-                        #raw_message = await self._websocket.recv()
-                        message = json.loads(raw_msg.data)[0]
-                        print(f"message {message['channel']}: {message}")
-
-                        # Process different message channels
-                        if message['channel'] == Channel.DATA:
-                            #print('data received: %s', message)
-                            #logger.debug('data received: %s', message)
-                            await self._queue.put(message['data'])
-                        elif message['channel'] == Channel.CANDLE:
-                            #print('candle received: %s', message)
-                            #logger.debug('candle received: %s', message)
-                            await self._queue_candle.put(message['data'])
-                        elif message['channel'] == Channel.SUBSCRIPTION:
-                            #print('sub received: %s', message)
-                            #logger.debug('sub received: %s', message)
-                            pass
-
     async def _connect(self) -> None:
         """
         Connect to the websocket server using the URL and authorization token provided
@@ -130,13 +81,12 @@ class DataStreamer:
                     async for raw_msg in ws:
                         # Receive raw message from the websocket
                         message = json.loads(raw_msg.data)[0]
-                        print(f"message {message['channel']}: {message}")
-                    
+                        logger.debug(f"message {message['channel']}: {message}")
+
                         if not self._handshake_done:
                             # Handshake phase
                             if message['channel'] == Channel.HANDSHAKE:
-                                #logger.debug('Handshake message: %s', message)
-                                print(f'handshake answer: {message}')
+                                logger.debug(f'Handshake message: {message}')
                                 if message['successful']:
                                     self.client_id = message['clientId']
                                     self._heartbeat_task = asyncio.create_task(self._heartbeat(10))
@@ -147,17 +97,14 @@ class DataStreamer:
                         else:
                             # Process different message channels
                             if message['channel'] == Channel.DATA:
-                                #print('data received: %s', message)
-                                #logger.debug('data received: %s', message)
+                                logger.debug(f'data received: {message}')
                                 await self._queue.put(message['data'])
                             elif message['channel'] == Channel.CANDLE:
-                                #print('candle received: %s', message)
-                                #logger.debug('candle received: %s', message)
+                                logger.debug(f'candle received: {message}')
                                 await self._queue_candle.put(message['data'])
                             elif message['channel'] == Channel.SUBSCRIPTION:
-                                #print('sub received: %s', message)
-                                #logger.debug('sub received: %s', message)
-                                pass
+                                logger.debug(f'subscription received: {message}')
+                                
 
 
     async def _handshake(self) -> None:
