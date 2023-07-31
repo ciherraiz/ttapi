@@ -1719,6 +1719,12 @@ class TimeAndSale(Event):
     buyer: None
     #: Undocumented; always None
     seller: None
+    #: datetime of original event
+    dtime: datetime = None
+
+    def __post_init__(self):
+        self.dtime = datetime.fromtimestamp(self.time/1000)
+    
 
 @dataclass
 class Trade(Event):

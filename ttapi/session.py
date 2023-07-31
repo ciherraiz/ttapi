@@ -39,7 +39,7 @@ class Session:
             raise TastyTradeException('You must provide a password or a remember token')
 
         # proxy server
-        self._proxy = ttcfg['network']['proxy'] if ttcfg['network']['proxy'] else None
+        self._proxy = ttcfg['network']['proxy'] if ttcfg['network'].get('proxy') else None
         # base url selection
         self._base_url = ttcfg['production']['url'] if is_production else ttcfg['certification']['url']
         self._headers: dict[str, str] = ttcfg['network']['headers'].copy()

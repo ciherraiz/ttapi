@@ -34,7 +34,13 @@ class DataAPI():
         for et in event_types:
             data = response.data.get(et.value)
             if not data is None:
-                events_data[et] = [self._map_event(et, values) for _, values in data.items()]
+                if et == EventType.TIME_AND_SALE:
+                    tas = []
+                    for symbol in symbols:
+                        tas.extend([self._map_event(et, v) for v in data[symbol]])
+                    events_data[et] = tas
+                else:
+                    events_data[et] = [self._map_event(et, v) for v in data.values()]
 
         return events_data
 
@@ -57,8 +63,8 @@ class DataAPI():
             return Summary(**event_dict)
         elif event_type == EventType.THEO_PRICE:
             return TheoPrice(**event_dict)
-        #elif event_type == EventType.TIME_AND_SALE:
-        #    return TimeAndSale(**event_dict)
+        elif event_type == EventType.TIME_AND_SALE:
+            return TimeAndSale(**event_dict)
         elif event_type == EventType.TRADE:
             return Trade(**event_dict)
         elif event_type == EventType.UNDERLYING:
