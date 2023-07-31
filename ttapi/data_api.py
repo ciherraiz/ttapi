@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Any, Optional, Dict, List
 from ttapi.exceptions import TastyTradeException
-from ttapi.models import EventType, Event, Greeks, Profile, Quote, Summary, TheoPrice, Trade, Underlying
+from ttapi.models import (EventType, Event, Greeks, Profile, Quote, 
+                          Summary, TheoPrice, Trade, Underlying, TimeAndSale)
 from ttapi.session import Session
 # https://kb.dxfeed.com/en/data-access/rest-api.html
 
@@ -12,13 +13,13 @@ class DataAPI():
         self._session = session
 
     async def get_event(self, 
-                  event_type: EventType,
+                  event_types: EventType,
                   symbols: List[str],
                   start_time: Optional[datetime] = None,
                   end_time: Optional[datetime] = None):
 
         params: Dict[str, Any] = {
-            'events': event_type,
+            'events': ','.join([e.value for e in event_types]),
             'symbols': ','.join(symbols)
         }
 
@@ -28,15 +29,18 @@ class DataAPI():
             params['toTime'] = int(end_time.timestamp() * 1000)
 
         response = await self._session.dxf_request('GET', params=params)
-        data = response.data[event_type]
         
-        return [self._map_event(event_type, values) for _, values in data.item()]
+        events_data = {}
+        for et in event_types:
+            data = response.data.get(et.value)
+            if not data is None:
+                events_data[et] = [self._map_event(et, values) for _, values in data.items()]
+
+        return events_data
 
 
 
-    def _map_event(
-        event_type: str,
-        event_dict: Dict[str, Any]) -> Event:
+    def _map_event(self, event_type: EventType, event_dict: Dict[str, Any]) -> Event:
         """
         Parses the raw JSON data from the dxfeed REST API into event objects.
 
@@ -53,6 +57,8 @@ class DataAPI():
             return Summary(**event_dict)
         elif event_type == EventType.THEO_PRICE:
             return TheoPrice(**event_dict)
+        #elif event_type == EventType.TIME_AND_SALE:
+        #    return TimeAndSale(**event_dict)
         elif event_type == EventType.TRADE:
             return Trade(**event_dict)
         elif event_type == EventType.UNDERLYING:

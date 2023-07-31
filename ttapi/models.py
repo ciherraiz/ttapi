@@ -1390,7 +1390,7 @@ class OrderChain(JsonDataclass):
     lite_nodes: list[OrderChainNode]
 
 
-class EventType(str, Enum):
+class EventType(Enum):
     """
     This is an :class:`~enum.Enum` that contains the valid subscription types for
     the quote streamer.
@@ -1553,6 +1553,20 @@ class Profile(Event):
     high52WeekPrice: float
     #: minimal (low) price in last 52 weeks
     low52WeekPrice: float
+    #: the correlation coefficient of the instrument to the S&P500 index
+    beta: float
+    #: earnings per share
+    earningsPerShare: float
+    #: Frequency of cash dividends payments per year (calculated)
+    dividendFrequency: int
+    #: the amount of the last paid dividend
+    exDividendAmount: float
+    #: identifier of the ex-dividend date
+    exDividendDayId: int
+    #: shares outstanding
+    shares: int
+    #: the number of shares that are available to the public for trade
+    freeFloat: int
 
 @dataclass
 class Quote(Event):
