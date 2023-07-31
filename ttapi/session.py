@@ -38,9 +38,11 @@ class Session:
         else:
             raise TastyTradeException('You must provide a password or a remember token')
 
+        # proxy server
+        self._proxy = ttcfg['network']['proxy'] if ttcfg['network']['proxy'] else None
         # base url selection
         self._base_url = ttcfg['production']['url'] if is_production else ttcfg['certification']['url']
-        self._headers: dict[str, str] = ttcfg['authentication']['headers'].copy()
+        self._headers: dict[str, str] = ttcfg['network']['headers'].copy()
 
         if two_factor_authentitation:
             self._headers['X-Tastyworks-OTP'] = two_factor_authentitation
@@ -51,7 +53,7 @@ class Session:
         Do a http request
         """
         async with aiohttp.ClientSession() as session: 
-            async with session.request(method=http_method, url=url + endpoint, headers=headers, json=json, data=data, params=params) as response:           
+            async with session.request(method=http_method, url=url + endpoint, headers=headers, json=json, data=data, params=params, proxy=self._proxy) as response:           
                 # Deserialize JSON output to Python object if there is some content
                 #if response.content:
                 try:

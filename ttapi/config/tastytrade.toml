@@ -6,7 +6,8 @@ wss = "wss://streamer.tastyworks.com"
 url = "https://api.cert.tastyworks.com"
 wss = "wss://streamer.cert.tastyworks.com"
 
-[authentication]
+[network]
+proxy = 'http://proxy-ap.sas.junta-andalucia.es:8110'
 headers.Content-Type = 'application/json'
 headers.Accept = 'application/json'
 
