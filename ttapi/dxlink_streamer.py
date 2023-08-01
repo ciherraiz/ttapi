@@ -66,11 +66,11 @@ class DXLinkStreamer:
                         self._authorized = True
 
     async def _setup(self) -> None:
-        message = {'type': 'SETUP', 
-                   'channel': '0', 
-                   'keepaliveTimeout': 60, 
-                   'acceptKeepaliveTimeout': 60, 
-                   'version': '1.0.0' }
+        message = {"type": "SETUP", 
+                   "channel": 0, 
+                   "keepaliveTimeout": 60, 
+                   "acceptKeepaliveTimeout": 60, 
+                   "version": "1.0.0" }
         await self._websocket.send_str(json.dumps([message]))
 
     
