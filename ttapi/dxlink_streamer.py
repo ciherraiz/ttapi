@@ -70,8 +70,8 @@ class DXLinkStreamer:
                    "channel": 0, 
                    "keepaliveTimeout": 60, 
                    "acceptKeepaliveTimeout": 60, 
-                   "version": "1.0.0" }
-        await self._websocket.send_str(json.dumps([message]))
+                   "version": "0.1" }
+        await self._websocket.send_json(message)
 
     
     async def _connect2(self) -> None:
