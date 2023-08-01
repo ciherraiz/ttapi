@@ -108,6 +108,7 @@ class Session:
         self._dxf_url = response.data['data']['websocket-url'] + '/rest/events.json'
         self._dxf_headers = {'Authorization': f'Bearer {self._dxf_token}'}
 
+        
         return self
 
     async def tt_request(self, http_method: str, endpoint: str, json: dict[str, str] = {}, data: str = None, params: dict[str, str] = {}):
@@ -153,13 +154,9 @@ class Session:
         return self._session_token
     
     @property
-    def dxf_token(self) -> str:
-        return self._dxf_token
-    
-    @property
-    def wss(self) -> str:
-        return self._base_wss
-    
-    @property
     def external_id(self) -> str:
         return self._external_id
+
+    @property
+    def proxy(self) -> str:
+        return self._proxy
