@@ -7,8 +7,11 @@ url = "https://api.cert.tastyworks.com"
 wss = "wss://streamer.cert.tastyworks.com"
 
 [network]
-proxy = 'http://proxy-ap.sas.junta-andalucia.es:8110'
+proxy = "http://proxy-ap.sas.junta-andalucia.es:8110"
 headers.Content-Type = 'application/json'
 headers.Accept = 'application/json'
 
+[dxlink]
+version = "0.1"
+keep_alive_timeout = 10
 

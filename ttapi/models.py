@@ -1408,17 +1408,22 @@ class EventType(Enum):
     TRADE = 'Trade'
     UNDERLYING = 'Underlying'
 
-
+"""
 class Channel(str, Enum):
-    """
-    This is an :class:`~enum.Enum` that contains the channels for the quote streamer.
-    """
+    
     CANDLE = '/service/timeSeriesData'
     DATA = '/service/data'
     HANDSHAKE = '/meta/handshake'
     HEARTBEAT = '/meta/connect'
     SUBSCRIPTION = '/service/sub'
+"""
 
+class ChannelState(Enum):
+    REQUEST = 'CHANNEL_REQUEST'
+    OPENED = 'CHANNEL_OPENED'
+    SUBSCRIPTION = 'FEED_SUBSCRIPTION'
+    CONFIG = 'FEED_CONFIG'
+    CANCEL = 'CHANNEL_CANCEL'
 
 # Dataclasses from ws datastreamer.
 # I cant't use Pydantic beacause I receive a lists of values. We need a mapping object to 

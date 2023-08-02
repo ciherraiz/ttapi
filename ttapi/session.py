@@ -3,7 +3,7 @@ import aiohttp
 from typing import Any, Optional
 from ttapi.models import RequestResult # type: ignore
 from ttapi.exceptions import TastyTradeException # type: ignore
-from ttapi.config import tastytrade as ttcfg
+from ttapi.config import tastytrade as cfg
 from ttapi.config import logger
 
 class Session:
@@ -39,10 +39,10 @@ class Session:
             raise TastyTradeException('You must provide a password or a remember token')
 
         # proxy server
-        self._proxy = ttcfg['network']['proxy'] if ttcfg['network'].get('proxy') else None
+        self._proxy = cfg['network']['proxy'] if cfg['network'].get('proxy') else None
         # base url selection
-        self._base_url = ttcfg['production']['url'] if is_production else ttcfg['certification']['url']
-        self._headers: dict[str, str] = ttcfg['network']['headers'].copy()
+        self._base_url = cfg['production']['url'] if is_production else cfg['certification']['url']
+        self._headers: dict[str, str] = cfg['network']['headers'].copy()
 
         if two_factor_authentitation:
             self._headers['X-Tastyworks-OTP'] = two_factor_authentitation
