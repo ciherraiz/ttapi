@@ -15,3 +15,5 @@ headers.Accept = 'application/json'
 version = "0.1"
 keep_alive_timeout = 10
 
+[trading]
+symbols = ["SPY", "VIX", "UVIX", "SPX"]

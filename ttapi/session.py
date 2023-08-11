@@ -3,8 +3,7 @@ import aiohttp
 from typing import Any, Optional
 from ttapi.models import RequestResult # type: ignore
 from ttapi.exceptions import TastyTradeException # type: ignore
-from ttapi.config import tastytrade as cfg
-from ttapi.config import logger
+from ttapi import cfg, logger
 
 class Session:
 

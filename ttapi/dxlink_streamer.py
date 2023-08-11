@@ -1,20 +1,25 @@
 import asyncio
-from asyncio import Queue, Lock
+from asyncio import Queue
 import json
 import aiohttp
-from typing import Optional, AsyncIterator, List
-from ttapi.config import logger
-from ttapi.config import tastytrade as cfg
+from typing import Optional, AsyncIterator, List, Dict
+from ttapi import logger, cfg
 from ttapi.exceptions import TastyTradeException
 from ttapi.session import Session
-from ttapi.dxlink_models import ChannelState, EventType, Quote, JsonDataclass
+from ttapi.dxlink_models import (ChannelState, EventType, Quote, Profile, Summary, Trade, 
+                                 JsonDataclass)
 
-# Channels id
-QUOTE_CH = 1
-PROFILE_CH = 2
-SUMMARY_CH = 3
-TRADE_CH = 4
-GREEKS_CH = 5
+# Even id channels
+QUOTE_CH: int = 1
+PROFILE_CH: int = 3
+SUMMARY_CH: int = 5
+TRADE_CH: int = 7
+GREEKS_CH: int = 9
+
+EVENTTYPE_CHANNEL: Dict = {EventType.QUOTE: QUOTE_CH,
+                    EventType.PROFILE: PROFILE_CH,
+                    EventType.SUMMARY: SUMMARY_CH,
+                    EventType.TRADE: TRADE_CH}
 
 class DXLinkStreamer:
     """
@@ -25,13 +30,14 @@ class DXLinkStreamer:
     """
     def __init__(self, session: Session):
         self._session: Session = session
+        self._queue: Queue = Queue()
         
         self._keep_alive_timeout = cfg['dxlink']['keep_alive_timeout']
 
-        self._channels = {QUOTE_CH: {'event': EventType.QUOTE, 'queue': Queue()},
-                          PROFILE_CH: {'event': EventType.PROFILE},
-                          SUMMARY_CH: {'event': EventType.SUMMARY},
-                          TRADE_CH: {'event': EventType.TRADE},
+        self._channels = {QUOTE_CH: {'event': EventType.QUOTE, 'symbols': []},
+                          PROFILE_CH: {'event': EventType.PROFILE, 'symbols': []},
+                          SUMMARY_CH: {'event': EventType.SUMMARY, 'symbols': []},
+                          TRADE_CH: {'event': EventType.TRADE, 'symbols': []},
                           GREEKS_CH: {'event': EventType.GREEKS}}
         
         self._authorized: bool = False
@@ -65,15 +71,14 @@ class DXLinkStreamer:
 
         # Connect to the websocket server
         async with aiohttp.ClientSession() as session:
-            async with session.ws_connect(uri, proxy=self._session.proxy) as ws:
-                self._websocket = ws
+            async with session.ws_connect(uri, proxy=self._session.proxy) as websocket:
+                self._websocket = websocket
                 await self._setup()
                 # Main loop to handle incoming messages
                 while True:
-                    async for raw_msg in ws:
+                    async for raw_msg in websocket:
                         message = json.loads(raw_msg.data)
                         await self._on_message(message)
-
 
     async def _setup(self) -> None:
         message = {"type": "SETUP", 
@@ -94,6 +99,10 @@ class DXLinkStreamer:
             case ChannelState.AUTHORIZATION.value:
                 if message_rcv['state'] == 'AUTHORIZED':
                     self._authorized = True
+                    #create channels
+                    for event in EVENTTYPE_CHANNEL.keys():
+                        await self._create_channel(event)
+                    
                     self._keep_alive_task = asyncio.create_task(self._keep_alive(self._keep_alive_timeout))
             case ChannelState.OPENED.value:
                 self._channels[message_rcv['channel']]['state'] = ChannelState.OPENED
@@ -112,26 +121,28 @@ class DXLinkStreamer:
             await self._websocket.send_json(message)
             await asyncio.sleep(timeout)
     
-    async def subscribe_quote(self, symbol) -> None:
-       
-        # Create a new channel for quotes
-        self._channels[QUOTE_CH]['state'] = ChannelState.REQUEST
-        self._channels[QUOTE_CH]['symbol'] = symbol
+    async def _create_channel(self, event: EventType) -> None:
+        channel=EVENTTYPE_CHANNEL[event]
+        self._channels[channel]['state'] = ChannelState.REQUEST
 
         message = {"type": ChannelState.REQUEST.value,
-                    "channel": 1,
+                    "channel": channel,
                     "service": "FEED",
                     "parameters": {"contract": "AUTO"}}
         await self._websocket.send_json(message)
 
-        while self._channels[QUOTE_CH]['state'] == ChannelState.REQUEST:
-            await asyncio.sleep(0)
 
+    async def subscribe_event(self, event: EventType, symbols: List[str]) -> None:
+        while self._channels[EVENTTYPE_CHANNEL[event]]['state'] == ChannelState.REQUEST:
+            await asyncio.sleep(0)
+         
         message = {"type": ChannelState.SUBSCRIPTION.value,
-                   "channel": QUOTE_CH,
-                   "add": [{"symbol": symbol, "type": EventType.QUOTE.value}]}
-        
+                    "channel": EVENTTYPE_CHANNEL[event],
+                    "add": [{"symbol": symbol, "type": event.value} for symbol in symbols]}
+
         await self._websocket.send_json(message)
+
+        self._channels[EVENTTYPE_CHANNEL[event]]['symbols'].extend(symbols)
 
     async def close(self) -> None:
         """
@@ -144,13 +155,11 @@ class DXLinkStreamer:
             await self._websocket.send_json(message)
         self._connect_task.cancel()
         self._keep_alive_task.cancel()
-
     
-    async def listen_quotes(self) -> AsyncIterator[JsonDataclass]:
+    async def listen(self) -> AsyncIterator[JsonDataclass]:
         while True:
-            data = await self._channels[QUOTE_CH]['queue'].get()
+            data = await self._queue.get()
             yield data
-
     
     async def _map_message(self, message) -> None:
         """
@@ -161,12 +170,15 @@ class DXLinkStreamer:
         """
 
         # parse type or warn for unknown type
-        channel = message['channel']
         data = message['data'][0]
-        match channel:
-            case QUOTE_CH:
+        match data['eventType']:
+            case EventType.QUOTE.value:
                 event = Quote(**data)
-                #data = Quote.from_stream(message['data'])
-                
+            case EventType.PROFILE.value:
+                event = Profile(**data)
+            case EventType.SUMMARY.value:
+                event = Summary(**data)
+            case EventType.TRADE.value:
+                event = Trade(**data)
         
-        await self._channels[channel]['queue'].put(event)
+        await self._queue.put(event)
