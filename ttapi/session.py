@@ -89,11 +89,10 @@ class Session:
         :param remember_token: previously creatd token
         :param two_factor_authentitation: is 2FA is enabled, this is de code sent
         """
-        
         self = cls(user, password, is_production, remember_me, remember_token, two_factor_authentitation)
         
         # TastyTrade API session
-        response = await self.tt_request('POST', '/sessions', json=self._payload)
+        response = await self.request('POST', '/sessions', json=self._payload)
 
         self._session_token = response.data['data']['session-token']
         self._remember_token: Optional[str] = response.data['data']['remember-token'] if remember_me else None
@@ -101,52 +100,29 @@ class Session:
         # add the header to use for API requests
         self._headers['Authorization'] = self._session_token
 
-        # Get DxFeed API session
-        response = await self.tt_request('GET', '/quote-streamer-tokens', json=self._payload)
-        self._dxf_token = response.data['data']['token']
-        self._dxf_url = response.data['data']['websocket-url'] + '/rest/events.json'
-        self._dxf_headers = {'Authorization': f'Bearer {self._dxf_token}'}
-
-        
         return self
 
-    async def tt_request(self, http_method: str, endpoint: str, json: dict[str, str] = {}, data: str = None, params: dict[str, str] = {}):
+    async def request(self, http_method: str, endpoint: str, json: dict[str, str] = {}, data: str = None, params: dict[str, str] = {}):
         '''
         Http request to TastyTrade platform
         '''
         return await self._http_request(http_method, self._base_url, endpoint, self._headers, json, data, params)
     
-    async def dxf_request(self, http_method: str, json: dict[str, str] = {}, data: str = None, params: dict[str, str] = {}):
-        '''
-        Http request to dxFeed platform
-        '''
-        return await self._http_request(http_method, self._dxf_url, '', self._dxf_headers, json, data, params)
-
-
-    def validate(self) -> bool:
-        """
-        Validate the current session
-        :return: True if the session is valid and False otherwise. 
-        """
-        self._adapter.do('POST', '/sessions/validate')
-        return True
-    
-    def get_customer(self) -> dict[str, Any]:
+    async def get_customer(self) -> dict[str, Any]:
         """
         Get the customer information
         :return: a 'Customer' object in JSON format.
         """
-        response = self._adapter.do('GET', '/customers/me')
+        response = await self.request('GET', '/customers/me')
+
         return response.data
     
-    
-    def logout(self) -> bool:
+    async def destroy(self) -> None:
         """
         Remove the session
         :return: True if the logout is valid
         """
-        self._adapter.do('DELETE', '/sessions')
-        return True
+        await self.request('DELETE', '/customers/me')
     
     @property
     def token(self) -> str:

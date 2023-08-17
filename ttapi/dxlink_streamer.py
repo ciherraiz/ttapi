@@ -33,6 +33,7 @@ class DXLinkStreamer:
         self._queue: Queue = Queue()
         
         self._keep_alive_timeout = cfg['dxlink']['keep_alive_timeout']
+        self._proxy = cfg['network']['proxy'] if cfg['network'].get('proxy') else None
 
         self._channels = {QUOTE_CH: {'event': EventType.QUOTE, 'symbols': []},
                           PROFILE_CH: {'event': EventType.PROFILE, 'symbols': []},
@@ -65,13 +66,13 @@ class DXLinkStreamer:
         """
         # Get DxLink API Quote Token
         # Quote streamer tokens are valid for 24 hours
-        response = await self._session.tt_request('GET', '/api-quote-tokens')
+        response = await self._session.request('GET', '/api-quote-tokens')
         self._token = response.data['data']['token']
         uri = response.data['data']['dxlink-url']
 
         # Connect to the websocket server
         async with aiohttp.ClientSession() as session:
-            async with session.ws_connect(uri, proxy=self._session.proxy) as websocket:
+            async with session.ws_connect(uri, proxy=self._proxy) as websocket:
                 self._websocket = websocket
                 await self._setup()
                 # Main loop to handle incoming messages

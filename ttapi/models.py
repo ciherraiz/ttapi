@@ -4,7 +4,7 @@ from decimal import Decimal
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 
 """Dataclass for modeling a request reponse
 """
@@ -703,6 +703,12 @@ class TotalFees(JsonDataclass):
     """
     total_fees: Optional[Decimal] = None
     total_fees_effect: Optional[Decimal] = None
+
+    @validator('total_fees_effect', pre=True)
+    def nonestr_to_none(cls, v):
+        if v == 'None':
+            v = None
+        return v
 
 class SymbolData(JsonDataclass):
     """

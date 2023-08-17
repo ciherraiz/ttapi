@@ -41,14 +41,14 @@ class Account(JsonDataclass):
     submitting_user_id: Optional[str] = None
 
     @classmethod
-    def get_accounts(cls, session: Session) -> list['Account']:
+    async def get_accounts(cls, session: Session) -> list['Account']:
         """
         Gets all trading accounts
         :param adapter: the object that performs the requests
         :return: a lists of `Account` objects
         """
 
-        response = session.request('GET', '/customers/me/accounts')
+        response = await session.request('GET', '/customers/me/accounts')
 
         accounts = []
         for item in response.data['data']['items']:
@@ -58,7 +58,7 @@ class Account(JsonDataclass):
         return accounts
     
     @classmethod
-    def get_account(cls, session: Session, account_number: str) -> 'Account':
+    async def get_account(cls, session: Session, account_number: str) -> 'Account':
         """
         Get a account object for a given ID
         : the account ID to get
@@ -66,34 +66,34 @@ class Account(JsonDataclass):
 
         :return: a Account object
         """
-        response = session.request('GET', f'/customers/me/accounts/{account_number}')
+        response = await session.request('GET', f'/customers/me/accounts/{account_number}')
         account = response.data['data']
         return cls(**account)
     
 
-    def get_trading_status(self, session: Session) -> TradingStatus:
+    async def get_trading_status(self, session: Session) -> TradingStatus:
         """
         Get the tranding status of the current account
         :param adapter: the object that performs the requests
         :return: a TradingStatus object
         """
-        response = session.request('GET', f'/accounts/{self.account_number}/trading-status')
+        response = await session.request('GET', f'/accounts/{self.account_number}/trading-status')
         status = response.data['data']
         return TradingStatus(**status)
     
 
-    def get_balances(self, session: Session) -> AccountBalance:
+    async def get_balances(self, session: Session) -> AccountBalance:
         """
         Get the current balances of the current account.
 
         :param session: the session to use for the request.
         :return: a AccountBalance object
         """
-        response = session.request('GET', f'/accounts/{self.account_number}/balances')
+        response = await session.request('GET', f'/accounts/{self.account_number}/balances')
         balance = response.data['data']
         return AccountBalance(**balance)
     
-    def get_balance_snapshots(self, 
+    async def get_balance_snapshots(self, 
                               session: Session,
                               snapshot_date: Optional[date] = None,
                               time_of_day: Optional[str] = None) -> AccountBalanceSnapshot:
@@ -110,55 +110,25 @@ class Account(JsonDataclass):
 
         """
         payload: dict[str, Any] = {
-            'snapshot-date': snapshot_date,
+            'snapshot-date': snapshot_date.strftime('%Y-%m-%d'),
             'time-of-day': time_of_day    
         }
 
-        response = session.request('GET', f'/accounts/{self.account_number}/balance-snapshots', params=payload)
+        response = await session.request('GET', f'/accounts/{self.account_number}/balance-snapshots', params=payload)
         return [AccountBalanceSnapshot(**item) for item in response.data['data']['items']]
     
-    def get_positions(
+    async def get_positions(
         self,
-        session: Session,
-        underlying_symbols: Optional[list[str]] = None,
-        symbol: Optional[str] = None,
-        instrument_type: Optional[InstrumentType] = None,
-        include_closed: bool = False,
-        underlying_product_code: Optional[str] = None,
-        partition_keys: Optional[list[str]] = None,
-        net_positions: bool = False,
-        include_marks: bool = False
+        session: Session
     ) -> list[Position]:
         """
         Get the current positions of the account.
-
-        :param session: the session to use for the request.
-        :param underlying_symbols: an array of underlying symbols for positions.
-        :param symbol: a single symbol.
-        :param instrument_type: the type of instrument.
-        :param include_closed: if closed positions should be included in the query.
-        :param underlying_product_code: the underlying future's product code.
-        :param partition_keys: account partition keys.
-        :param net_positions: returns net positions grouped by instrument type and symbol.
-        :param include_marks: include current quote mark (note: can decrease performance).
-
-        :return: a list of 'Position' objects in JSON format.
+        :return: a list of 'Position' objects.
         """
-        payload: dict[str, Any] = {
-            'underlying-symbol[]': underlying_symbols,
-            'symbol': symbol,
-            'instrument-type': instrument_type,
-            'include-closed-positions': include_closed,
-            'underlying-product-code': underlying_product_code,
-            'partition-keys[]': partition_keys,
-            'net-positions': net_positions,
-            'include-marks': include_marks
-        }
-    
-        response = session.request('GET', f'/accounts/{self.account_number}/positions', params=payload)
+        response = await session.request('GET', f'/accounts/{self.account_number}/positions')
         return [Position(**item ) for item in response.data['data']['items']]
     
-    def get_transactions(
+    async def get_transactions(
             self,
             session: Session,
             per_page: int = 100,
@@ -203,22 +173,13 @@ class Account(JsonDataclass):
 
             :return: a list of Tastytrade 'Transaction' objects
             """
-            # if a specific page is provided, we just get that page;
-            # otherwise, we loop through all pages
-            paginate: bool = False
-            if page_offset is None:
-                page_offset = 0
-                paginate = True
-            
             payload: dict[str, Any] = {
-                'per-page': per_page,
-                'page-offset': page_offset,
                 'sort': sort,
                 'type': type,
                 'types[]': types,
                 'sub-type[]': sub_types,
-                'start-date': start_date,
-                'end-date': end_date,
+                'start-date': start_date.strftime('%Y-%m-%d'),
+                'end-date': end_date.strftime('%Y-%m-%d'),
                 'instrument-type': instrument_type,
                 'symbol': symbol,
                 'underlying-symbol': underlying_symbol,
@@ -230,23 +191,11 @@ class Account(JsonDataclass):
             }
             
             payload = {k: v for k,v in payload.items() if v is not None}
-            pages = []
-            while True:
-                response = session.request('GET', f'/accounts/{self.account_number}/transactions', params=payload)
-                pages.extend(response.data['data']['items'])
-                
-                pagination = response.data['pagination']
-            
-                if pagination['page-offset'] >= pagination['total-pages'] - 1: # finished
-                    break
-                if not paginate:
-                    break
-                
-                payload['page-offset'] += 1  # type: ignore
+            response = await session.request('GET', f'/accounts/{self.account_number}/transactions', params=payload)
 
-            return [Transaction(**item) for item in pages]
+            return [Transaction(**item) for item in response.data['data']['items']]
 
-    def get_transaction(self, session: Session, id: int) -> Transaction:
+    async def get_transaction(self, session: Session, id: int) -> Transaction:
         """
         Get a single transaction by ID.
 
@@ -255,10 +204,10 @@ class Account(JsonDataclass):
 
         :return: a Transaction object.
         """
-        response = session.request('GET', f'/accounts/{self.account_number}/transactions/{id}')
+        response = await session.request('GET', f'/accounts/{self.account_number}/transactions/{id}')
         return Transaction(**response.data['data'])
     
-    def get_total_fees(self, session: Session, date: date = date.today()) -> dict[str, Any]:
+    async def get_total_fees(self, session: Session, date: date = date.today()) -> dict[str, Any]:
         """
         Get the total fees for a given date.
 
@@ -267,11 +216,11 @@ class Account(JsonDataclass):
 
         :return: a TotalFees object.
         """
-        payload: dict[str, Any] = {'date': date}
-        response = session.request('GET', f'/accounts/{self.account_number}/transactions/total-fees', params=payload)
+        payload: dict[str, Any] = {'date': date.strftime('%Y-%m-%d')}
+        response = await session.request('GET', f'/accounts/{self.account_number}/transactions/total-fees', params=payload)
         return TotalFees(**response.data['data'])
     
-    def get_net_liquidating_value_history(
+    async def get_net_liquidating_value_history(
         self,
         session: Session,
         time_back: Optional[str] = None,
@@ -301,7 +250,8 @@ class Account(JsonDataclass):
         else:
             payload = {'time-back': time_back}
 
-        response = session.request('GET', f'/accounts/{self.account_number}/net-liq/history', params=payload)
+        response = await session.request('GET', f'/accounts/{self.account_number}/net-liq/history', params=payload)
+
         return [NetLiquidation(**item ) for item in response.data['data']['items']]
 
 
